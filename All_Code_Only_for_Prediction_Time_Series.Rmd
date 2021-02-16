@@ -1,0 +1,367 @@
+---
+title: "Using TIme Series To Predict Cases and deaths for April 21"
+author: "Ali Alghaithi"
+date: "4/13/2020"
+output: pdf_document
+---
+
+```{r}
+library(readr)
+covid_confirmed_usafacts1 <- read.csv("https://usafactsstatic.blob.core.windows.net/public/data/covid-19/covid_confirmed_usafacts.csv")
+covid_confirmed_usafacts1    #target <- c("Statewide Unallocated", "Washington")
+
+covid_confirmed_usafacts2 <- covid_confirmed_usafacts1 %>% filter(County.Name != "Statewide Unallocated" & County.Name != "Washington") 
+covid_confirmed_usafacts2
+covid_confirmed_usafacts <- covid_confirmed_usafacts2[]
+countyFIPS_vc = as.vector(covid_confirmed_usafacts$countyFIPS)
+# Load required packages.
+library(janitor)
+library(tidyr)
+library(dplyr)
+
+
+new_data <- as_tibble((covid_confirmed_usafacts)) %>%
+ pivot_longer(-c(County.Name,State,stateFIPS,countyFIPS), names_to = "dates", values_to = "count")
+
+new_data <- new_data[order(new_data$County.Name),]
+tail(new_data)
+
+
+
+library(lubridate)
+ new_data$dates <- gsub("X", "", as.character(new_data$dates))
+ new_data$dates <- gsub('\\.', '/', as.character(new_data$dates))
+ new_data$dates <- as.Date(new_data$dates, format = "%m/%d/%y")
+ 
+
+ # Example
+pred_out = c()
+
+
+for ( i in 1:3144) {
+ countyFIPS_IN =  countyFIPS_vc[i]
+ new_data_Abbeville <- new_data %>% filter(countyFIPS == countyFIPS_IN)
+ new_data_Abbeville
+#https://stackoverflow.com/questions/11422493/using-r-how-do-i-create-a-time-series-object-with-dates
+# simple exponential smoothing method to consider 
+
+
+#plot(decompose(ts(new_data_Abbeville[,5:6])))
+
+
+library(xts)
+new_data_Abbeville_ts <- xts(new_data_Abbeville$count, order.by=new_data_Abbeville$dates)
+new_data_Abbeville_ts
+library(forecast)
+library(TSA)
+#Then we do not need to have any Differencing
+#ARIMA(0,2,1) to apply 
+new_data_Abbeville_ts_model <- auto.arima(new_data_Abbeville_ts)
+
+library(forecast)
+# https://ourcodingclub.github.io/tutorials/time/
+futurVal <- forecast(new_data_Abbeville_ts_model,h=7)
+
+pred_out[i] = round(as.data.frame(futurVal)[7,1])
+
+}
+
+
+# Time SERIES ERROR 
+
+
+
+
+
+Counties_Data_timeseries_model <- covid_confirmed_usafacts2 %>% mutate(fitted.results = pred_out)
+Counties_Data_timeseries_model
+Final_x<- Counties_Data_timeseries_model[,c(1,2,3,ncol(Counties_Data_timeseries_model))]
+Final_x
+```
+
+
+```{r}
+
+library(readr)
+covid_confirmed_usafacts1 <- read.csv("https://usafactsstatic.blob.core.windows.net/public/data/covid-19/covid_confirmed_usafacts.csv")
+
+target <- c("Statewide Unallocated", "Washington")
+covid_confirmed_usafacts2<- covid_confirmed_usafacts1 %>% filter(County.Name %in%target) 
+covid_confirmed_usafacts <- covid_confirmed_usafacts2[,]
+stateFIPS_vc = as.vector(covid_confirmed_usafacts$stateFIPS)
+# Load required packages.
+library(janitor)
+library(tidyr)
+library(dplyr)
+
+
+new_data <- as_tibble((covid_confirmed_usafacts)) %>%
+ pivot_longer(-c(County.Name,State,stateFIPS,countyFIPS), names_to = "dates", values_to = "count")
+
+new_data <- new_data[order(new_data$County.Name),]
+tail(new_data)
+
+
+library(lubridate)
+ new_data$dates <- gsub("X", "", as.character(new_data$dates))
+ new_data$dates <- gsub('\\.', '/', as.character(new_data$dates))
+ new_data$dates <- as.Date(new_data$dates, format = "%m/%d/%y")
+ 
+ 
+ # Example
+state_out = c()
+
+
+for ( i in 1:51) {
+ stateFIPS_IN =  stateFIPS_vc[i]
+ new_data_Abbeville <- new_data %>% filter(stateFIPS == stateFIPS_IN)
+ new_data_Abbeville
+#https://stackoverflow.com/questions/11422493/using-r-how-do-i-create-a-time-series-object-with-dates
+# simple exponential smoothing method to consider 
+
+
+#plot(decompose(ts(new_data_Abbeville[,5:6])))
+
+
+library(xts)
+new_data_Abbeville_ts <- xts(new_data_Abbeville$count, order.by=new_data_Abbeville$dates)
+new_data_Abbeville_ts
+library(forecast)
+library(TSA)
+#Then we do not need to have any Differencing
+#ARIMA(0,2,1) to apply 
+new_data_Abbeville_ts_model <- auto.arima(new_data_Abbeville_ts)
+
+library(forecast)
+# https://ourcodingclub.github.io/tutorials/time/
+futurVal <- forecast(new_data_Abbeville_ts_model,h=7)
+state_out[i] = round(as.data.frame(futurVal)[7,1])
+
+}
+
+
+
+
+# Time SERIES ERROR 
+
+compare <- data.frame("stateFIPS_vc" = stateFIPS_vc, "fitted.results" = state_out, "Real" = covid_confirmed_usafacts2[1:51,ncol(covid_confirmed_usafacts2)], stringsAsFactors = FALSE)
+
+misClassError <- mean(state_out != covid_confirmed_usafacts2[1:51,ncol(covid_confirmed_usafacts2)])
+
+print(paste('Accuracy',(1-misClassError)*100))
+compare
+
+unallocated_state_Data_timeseries_model <- covid_confirmed_usafacts2 %>% mutate(fitted.results = state_out)
+
+unallocated_state_Data_timeseries_model
+Final_x2<- unallocated_state_Data_timeseries_model[,c(1,2,3,ncol(unallocated_state_Data_timeseries_model))]
+Final_x2
+```
+
+
+```{r}
+
+Case <- rbind(Final_x,Final_x2)
+names(Case)[names(Case) == 'fitted.results'] <- 'Cases'
+Case %>% filter(Cases>30000)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+library(readr)
+covid_confirmed_usafacts1 <- read.csv("https://usafactsstatic.blob.core.windows.net/public/data/covid-19/covid_deaths_usafacts.csv")
+covid_confirmed_usafacts1    #target <- c("Statewide Unallocated", "Washington")
+
+covid_confirmed_usafacts2 <- covid_confirmed_usafacts1 %>% filter(County.Name != "Statewide Unallocated" & County.Name != "Washington") 
+covid_confirmed_usafacts2
+covid_confirmed_usafacts <- covid_confirmed_usafacts2[,]
+countyFIPS_vc = as.vector(covid_confirmed_usafacts$countyFIPS)
+# Load required packages.
+library(janitor)
+library(tidyr)
+library(dplyr)
+
+
+new_data <- as_tibble((covid_confirmed_usafacts)) %>%
+ pivot_longer(-c(County.Name,State,stateFIPS,countyFIPS), names_to = "dates", values_to = "count")
+
+new_data <- new_data[order(new_data$County.Name),]
+tail(new_data)
+
+
+
+library(lubridate)
+ new_data$dates <- gsub("X", "", as.character(new_data$dates))
+ new_data$dates <- gsub('\\.', '/', as.character(new_data$dates))
+ new_data$dates <- as.Date(new_data$dates, format = "%m/%d/%y")
+ 
+
+ # Example
+pred_out = c()
+
+
+for ( i in 1:3144) {
+ countyFIPS_IN =  countyFIPS_vc[i]
+ new_data_Abbeville <- new_data %>% filter(countyFIPS == countyFIPS_IN)
+ new_data_Abbeville
+#https://stackoverflow.com/questions/11422493/using-r-how-do-i-create-a-time-series-object-with-dates
+# simple exponential smoothing method to consider 
+
+
+#plot(decompose(ts(new_data_Abbeville[,5:6])))
+
+
+library(xts)
+new_data_Abbeville_ts <- xts(new_data_Abbeville$count, order.by=new_data_Abbeville$dates)
+new_data_Abbeville_ts
+library(forecast)
+library(TSA)
+#Then we do not need to have any Differencing
+#ARIMA(0,2,1) to apply 
+new_data_Abbeville_ts_model <- auto.arima(new_data_Abbeville_ts)
+
+library(forecast)
+# https://ourcodingclub.github.io/tutorials/time/
+futurVal <- forecast(new_data_Abbeville_ts_model,h=7)
+
+pred_out[i] = round(as.data.frame(futurVal)[7,1])
+
+}
+
+
+# Time SERIES ERROR 
+
+
+
+compare <- data.frame("fitted.results" = pred_out, "Real" = covid_confirmed_usafacts2[1:3144,ncol(covid_confirmed_usafacts2)], stringsAsFactors = FALSE)
+
+misClassError <- mean(pred_out != covid_confirmed_usafacts2[1:3144,ncol(covid_confirmed_usafacts2)])
+
+print(paste('Accuracy',(1-misClassError)*100))
+compare
+
+Counties_Data_timeseries_model <- covid_confirmed_usafacts2 %>% mutate(fitted.results = pred_out)
+Counties_Data_timeseries_model
+Final_y <- Counties_Data_timeseries_model[,c(1,2,3,ncol(Counties_Data_timeseries_model))]
+Final_y
+```
+
+
+```{r}
+
+library(readr)
+covid_confirmed_usafacts1 <- read.csv("https://usafactsstatic.blob.core.windows.net/public/data/covid-19/covid_deaths_usafacts.csv")
+
+target <- c("Statewide Unallocated", "Washington")
+covid_confirmed_usafacts2<- covid_confirmed_usafacts1 %>% filter(County.Name %in%target) 
+covid_confirmed_usafacts <- covid_confirmed_usafacts2[,]
+stateFIPS_vc = as.vector(covid_confirmed_usafacts$stateFIPS)
+# Load required packages.
+library(janitor)
+library(tidyr)
+library(dplyr)
+
+
+new_data <- as_tibble((covid_confirmed_usafacts)) %>%
+ pivot_longer(-c(County.Name,State,stateFIPS,countyFIPS), names_to = "dates", values_to = "count")
+
+new_data <- new_data[order(new_data$County.Name),]
+tail(new_data)
+
+
+library(lubridate)
+ new_data$dates <- gsub("X", "", as.character(new_data$dates))
+ new_data$dates <- gsub('\\.', '/', as.character(new_data$dates))
+ new_data$dates <- as.Date(new_data$dates, format = "%m/%d/%y")
+ 
+ 
+ # Example
+state_out = c()
+
+
+for ( i in 1:51) {
+ stateFIPS_IN =  stateFIPS_vc[i]
+ new_data_Abbeville <- new_data %>% filter(stateFIPS == stateFIPS_IN)
+ new_data_Abbeville
+#https://stackoverflow.com/questions/11422493/using-r-how-do-i-create-a-time-series-object-with-dates
+# simple exponential smoothing method to consider 
+
+
+#plot(decompose(ts(new_data_Abbeville[,5:6])))
+
+
+library(xts)
+new_data_Abbeville_ts <- xts(new_data_Abbeville$count, order.by=new_data_Abbeville$dates)
+new_data_Abbeville_ts
+library(forecast)
+library(TSA)
+#Then we do not need to have any Differencing
+#ARIMA(0,2,1) to apply 
+new_data_Abbeville_ts_model <- auto.arima(new_data_Abbeville_ts)
+
+library(forecast)
+# https://ourcodingclub.github.io/tutorials/time/
+futurVal <- forecast(new_data_Abbeville_ts_model,h=7)
+state_out[i] = round(as.data.frame(futurVal)[7,1])
+
+}
+
+
+
+
+# Time SERIES ERROR 
+
+compare <- data.frame("stateFIPS_vc" = stateFIPS_vc, "fitted.results" = state_out, "Real" = covid_confirmed_usafacts2[1:51,ncol(covid_confirmed_usafacts2)], stringsAsFactors = FALSE)
+
+misClassError <- mean(state_out != covid_confirmed_usafacts2[1:51,ncol(covid_confirmed_usafacts2)])
+
+print(paste('Accuracy',(1-misClassError)*100))
+compare
+
+unallocated_state_Data_timeseries_model <- covid_confirmed_usafacts2 %>% mutate(fitted.results = state_out)
+unallocated_state_Data_timeseries_model
+
+Final_y1 <- unallocated_state_Data_timeseries_model[,c(1,2,3,ncol(unallocated_state_Data_timeseries_model))]
+
+
+Final_y1
+```
+
+```{r}
+Death<- rbind(Final_y,Final_y1)
+
+names(Death)[names(Death) == 'fitted.results'] <- 'Deaths'
+Death
+
+final_sub <- merge(Death,Case, by = c('countyFIPS','State'));final_sub
+
+drops <- c("County.Name.y")
+final_sub<- final_sub[ , !(names(final_sub) %in% drops)]
+names(final_sub)[names(final_sub) == 'County.Name.x'] <- 'County.Name'
+
+
+
+col_order <- c("countyFIPS", "County.Name", "State",
+               "Cases", "Deaths")
+final_sub <- final_sub[, col_order]
+
+final_sub$Cases[final_sub$Cases<0] <- 0
+
+summary(final_sub)
+write.csv(final_sub, file="for_submission.csv", row.names = FALSE, quote=FALSE)
+
+
+final_sub %>% filter(County.Name=="Douglas County")
+```
+
